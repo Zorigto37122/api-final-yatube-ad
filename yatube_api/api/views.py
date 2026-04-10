@@ -1,6 +1,8 @@
 from django.shortcuts import get_object_or_404
 from rest_framework import filters, mixins, viewsets
+from rest_framework.pagination import LimitOffsetPagination
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.response import Response
 
 from api.permissions import IsAuthorOrReadOnly
 from api.serializers import (
@@ -16,6 +18,18 @@ class PostViewSet(viewsets.ModelViewSet):
     queryset = Post.objects.select_related('author', 'group')
     serializer_class = PostSerializer
     permission_classes = (IsAuthorOrReadOnly,)
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+
+        if 'limit' not in request.query_params and 'offset' not in request.query_params:
+            serializer = self.get_serializer(queryset, many=True)
+            return Response(serializer.data)
+
+        paginator = LimitOffsetPagination()
+        page = paginator.paginate_queryset(queryset, request, view=self)
+        serializer = self.get_serializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)
 
     def perform_create(self, serializer):
         serializer.save(author=self.request.user)
